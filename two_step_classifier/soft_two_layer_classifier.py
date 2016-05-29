@@ -2,14 +2,6 @@ from importlib import import_module
 import bottleneck as bn
 from clustering import *
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
-import xgboost as xgb
-from xgboost.core import XGBoostError
-from sklearn.ensemble import AdaBoostClassifier
-from sklearn.naive_bayes import MultinomialNB
-from sklearn.linear_model import SGDClassifier
-from sklearn.cross_validation import train_test_split
 import sys
 import time
 
@@ -106,7 +98,7 @@ class soft_two_layer_classifier(object):
 
 		'''Train a classifier on x_train and y_train_cluster'''
 
-		clf = LogisticRegression(penalty='l2',multi_class='ovr',C=3.16)
+		clf = DecisionTreeClassifier()
 		clf = clf.fit(self.x_train, self.y_train_cluster)
 		if pred_on_train:
 			print 'First layer accuracy: ', clf.score(self.x_train, self.y_train_cluster)
@@ -125,7 +117,7 @@ class soft_two_layer_classifier(object):
 			c_y_train_subreddit = self.y_train_subreddit[np.where(self.y_train_cluster == i)]
 
 			try:
-				clf = AdaBoostClassifier(base_estimator=SGDClassifier(loss="log"), n_estimators=100, learning_rate=0.5,)
+				clf = DecisionTreeClassifier()
 				models.append(clf.fit(c_x_train, c_y_train_subreddit))
 
 			except (ValueError,XGBoostError):
@@ -218,39 +210,20 @@ def main():
 
 	x_train = '../generate_train_test/final_dataset/X_train.p'
 	x_validate = '../generate_train_test/final_dataset/X_validate.p'
-	x_test = '../generate_train_test/final_dataset/X_test.p'
 	y_train = '../generate_train_test/final_dataset/y_train.p'
 	y_validate = '../generate_train_test/final_dataset/y_validate.p'
-	y_test = '../generate_train_test/final_dataset/y_test.p'
 
-	results_filename = '../results/ada_lr.txt'
+	num_clusters = 10
+	num_tfidf = 250
 
-	#num_clusters = [5,8,10,12,15]
-	num_clusters = [10]
-	top_tfidf = [250]
+	#Usage: cluster_params = [num_cluster, top_n_tfidf]
+	c = soft_two_layer_classifier(cluster_method='new', cluster_params=[num_clusters,num_tfidf], num_suggestions=5,x_train_file=x_train, x_test_file=x_validate, y_train_file=y_train, y_test_file=y_validate)
+	
+	train_preds = c.classify(pred_on_train=True)
+	print 'Top-k precision on train set: ' + str(c.top_n_accuracy(c.y_train_subreddit,train_preds))
 
-	with open(results_filename,'wb') as out_f:
-
-		for num_tfidf in top_tfidf: 
-			for num_c in num_clusters:
-
-				out_f.write(str(num_c)+','+str(num_tfidf)+'\n') 
-				print str(num_c)+','+str(num_tfidf)
-				start_time = time.time()
-
-				#Usage: cluster_params = [num_cluster, top_n_tfidf]
-				c = soft_two_layer_classifier(cluster_method='new', cluster_params=[num_c,num_tfidf], num_suggestions=5,x_train_file=x_train, x_test_file=x_validate, y_train_file=y_train, y_test_file=y_validate)
-				
-				train_preds = c.classify(pred_on_train=True)
-				out_f.write("Top-k precision on train set: " + str(c.top_n_accuracy(c.y_train_subreddit,train_preds))+'\n')
-
-				test_preds = c.classify(pred_on_train=False)
-				out_f.write("Top-k precision on test set: " + str(c.top_n_accuracy(c.y_test_subreddit,test_preds))+'\n')
-
-				time_elapsed = time.time() - start_time
-
-				out_f.write("Total time: " + str(time_elapsed/60) + " minutes\n\n")
-				print "Total time: " + str(time_elapsed/60) + " minutes\n\n"
+	test_preds = c.classify(pred_on_train=False)
+	print 'Top-k precision on test set: ' + str(c.top_n_accuracy(c.y_test_subreddit,test_preds))
 
 	#Usage: if cluster_method='manual', then in cluster_params, pass the list of lists containing the actual clusters: one list per cluster, containing subreddit names
 	#cluster_example = [['funny', 'todayilearned', 'nfl', 'pics', 'news'], ['videos'], ['AskReddit'], ['leagueoflegends'], ['pcmasterrace']]
